@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from html.parser import HTMLParser
-from urllib.parse import urldefrag, urljoin, urlsplit
+from urllib.parse import parse_qs, urldefrag, urljoin, urlsplit
 
 from ..models import Candidate
 
@@ -53,6 +53,17 @@ def _ext(url: str) -> str:
     return last.rsplit(".", 1)[-1].lower() if "." in last else ""
 
 
+def _query_doc_ext(url: str, exts: set[str]) -> str:
+    """Documents served through a viewer page, e.g. the NH House Record at
+    viewer.aspx?fileName=Calendars\\2026\\No12+March+20+2026.PDF"""
+    for values in parse_qs(urlsplit(url).query).values():
+        for v in values:
+            ext = v.rsplit(".", 1)[-1].lower() if "." in v else ""
+            if ext in exts:
+                return ext
+    return ""
+
+
 def find(session, cfg):
     exts = set(cfg.get("extensions", DEFAULT_EXTS))
     max_pages = cfg.get("max_pages_per_seed", 200)
@@ -69,7 +80,10 @@ def find(session, cfg):
             try:
                 final, html = session.get_text(page)
             except Exception as e:
-                log.warning("crawler skip %s: %s", page, e)
+                if page == start:   # the whole seed is dead: count it as a source error
+                    log.error("crawler seed %s unreachable: %s", start, e)
+                else:
+                    log.warning("crawler skip %s: %s", page, e)
                 continue
             pages += 1
             parser = _Links()
@@ -84,11 +98,13 @@ def find(session, cfg):
                 if parts.scheme not in ("http", "https"):
                     continue
                 ext = _ext(url)
+                if ext not in exts:
+                    ext = _query_doc_ext(url, exts) or ext
                 if ext in exts:
                     if url in seen_docs:
                         continue
                     seen_docs.add(url)
-                    name = parts.path.rsplit("/", 1)[-1]
+                    name = parts.path.rsplit("/", 1)[-1] if _ext(url) in exts else url.rsplit("\\", 1)[-1]
                     yield Candidate(
                         url=url,
                         title=text or name,

@@ -21,14 +21,16 @@ PDF = b"%PDF-1.4 fake test document\n"
 def make_routes(base):
     return {
         "/robots.txt": ("text/plain", b"User-agent: *\nDisallow: /private/\n"),
-        "/api/3/action/package_search": ("application/json", json.dumps({"result": {"results": [{
-            "id": "ds1", "name": "nh-police-stops", "title": "New Hampshire State Police Traffic Stops",
-            "notes": "Stop data released under RSA 91-A.", "organization": {"title": "NH DOS"},
-            "metadata_modified": "2026-09-01T00:00:00",
-            "resources": [
-                {"url": f"{base}/files/stops.csv", "format": "CSV", "name": "stops"},
-                {"url": f"{base}/files/stops.html", "format": "HTML", "name": "web view"},
-            ]}]}}).encode()),
+        # shape of catalog.data.gov/search as returned live on 2026-11-10
+        "/search": ("application/json", json.dumps({"after": None, "sort": "relevance", "results": [
+            {"title": "New Hampshire State Police Traffic Stops", "slug": "nh-police-stops",
+             "description": "<p>Stop data released under RSA 91-A.</p>", "publisher": "NH DOS",
+             "identifier": "ds1",
+             "dcat": {"modified": "2026-09-01", "distribution": [
+                 {"downloadURL": f"{base}/files/stops.csv", "mediaType": "text/csv", "title": "stops"},
+                 {"accessURL": f"{base}/files/stops.html", "title": "web view"}]}},
+            {"title": "New Hampshire record with no files", "slug": "x", "dcat": {"distribution": None}},
+        ]}).encode()),
         "/fr/documents.json": ("application/json", json.dumps({"results": [{
             "title": "Privacy Act of 1974; System of Records (New Hampshire surveillance program)",
             "abstract": "Notice.", "pdf_url": f"{base}/files/fr.pdf", "html_url": f"{base}/fr/1",
@@ -53,7 +55,9 @@ def make_routes(base):
             <a href="mailto:x@y">mail</a></html>""".encode()),
         "/site/sub.html": ("text/html", b"""<html><title>Archive</title>
             <a href="/files/fr_copy.pdf">Privacy surveillance audit copy</a>
-            <a href="/files/huge.pdf">Huge audit report surveillance</a></html>"""),
+            <a href="/files/huge.pdf">Huge audit report surveillance</a>
+            <a href="/house/viewer.aspx?fileName=Calendars\\2026\\No12+March+20+2026.PDF">House Record: committee report on HB 1576</a></html>"""),
+        "/house/viewer.aspx": ("application/pdf", PDF + b"house record"),
         "/files/stops.csv": ("text/csv", b"date,town\n2026-01-01,Concord\n"),
         "/files/stops.html": ("text/html", b"<html>web</html>"),
         "/files/fr.pdf": ("application/pdf", PDF + b"fr"),
@@ -101,8 +105,7 @@ def config(base, root):
     cfg["http"]["max_retries"] = 0
     cfg["limits"]["max_file_mb"] = 0.1
     s = cfg["sources"]
-    s["ckan"]["portals"] = [{"name": "data_gov", "base_url": base, "rows": 5,
-                             "formats": ["csv", "html"], "queries": ["x"]}]
+    s["datagov"].update(base_url=base, queries=["x"], pages=1)
     s["federal_register"].update(api=f"{base}/fr/documents.json", queries=["x"])
     s["courtlistener"].update(api=f"{base}/cl/search/", storage_url=f"{base}/",
                               site_url=base, queries=["x"])
@@ -120,10 +123,11 @@ def test_full_run_then_rerun(server, tmp_path):
     files = sorted(p.relative_to(root).as_posix() for p in root.rglob("*")
                    if p.is_file() and not p.name.endswith(".source.json") and "_index" not in p.parts)
 
-    # stops.csv, fr.pdf, op.pdf, audit.pdf, investigation.pdf
-    assert stats["new"] == 5, files
+    # stops.csv, fr.pdf, op.pdf, audit.pdf, investigation.pdf, House Record via viewer.aspx
+    assert stats["new"] == 6, files
     assert stats["duplicate"] == 1                     # fr_copy.pdf has fr.pdf's bytes
-    assert len(files) == 5
+    assert len(files) == 6
+    assert any(f.startswith("Legislative_Watch/") and "House-Record" in f for f in files)
     assert any(f.startswith("Public_Health_and_Safety/") and f.endswith(".csv") for f in files)
     # filed by topic: a right-to-know opinion goes to Right_to_Know, not Courts
     assert any(f.startswith("Right_to_Know/") and "Doe-v-Town-of-Exeter" in f for f in files)
@@ -147,10 +151,10 @@ def test_full_run_then_rerun(server, tmp_path):
     urls = {dup[0]["url"]} | {a["url"] for a in dup[0]["also_found_at"]}
     assert urls == {f"{server}/files/fr.pdf", f"{server}/files/fr_copy.pdf"}
     with open(root / "_index" / "manifest.csv") as fh:
-        assert len(list(csv.DictReader(fh))) == 5
+        assert len(list(csv.DictReader(fh))) == 6
 
     again = run(cfg)
-    assert again["new"] == 0 and again["already_had"] >= 6
+    assert again["new"] == 0 and again["already_had"] >= 7
 
 
 def test_dry_run_downloads_nothing(server, tmp_path):
@@ -189,3 +193,10 @@ def test_dead_sources_are_reported(tmp_path):
     stats = run(cfg, only=["federal_register"])
     assert stats["found"] == 0 and stats["source_errors"] == 1
     assert "| 1 | 0 |" in Path(stats["report"]).read_text()
+
+
+def test_dead_crawler_seed_is_a_source_error(tmp_path):
+    cfg = config("http://127.0.0.1:9", tmp_path)
+    cfg["http"]["timeout_seconds"] = 2
+    stats = run(cfg, only=["crawler"])
+    assert stats["source_errors"] == 1

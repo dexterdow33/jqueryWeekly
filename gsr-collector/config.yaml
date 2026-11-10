@@ -1,9 +1,9 @@
 # GSR Collector configuration. Edit this file; no code changes needed.
 #
-# VERIFY markers: these endpoints and pages could not be opened from the
-# session that built this tool (network blocked). Run
+# Each source notes whether it was checked against the live service, and
+# when. A VERIFY marker means it has not been. Run
 #   python -m gsr_collector --dry-run
-# once and read the report before trusting a source.
+# and read the report before trusting a source.
 
 archive_root: ~/GSR_Archive      # local archive folder; scripts/sync_to_drive.sh pushes it to Google Drive
 
@@ -57,25 +57,28 @@ scoring:
       [press freedom, journalist, reporter, subpoena, shield law, defamation, free speech]
 
 sources:
+  datagov:
+    enabled: true                                 # live-checked 2026-11-10: catalog.data.gov/search (JSON)
+    rows: 50                                      # results per page
+    pages: 2                                      # pages per query
+    queries: ['"New Hampshire"', '"New Hampshire" police', '"New Hampshire" health',
+              '"New Hampshire" housing', '"New Hampshire" education spending']
+
+  # For any open-data portal that still runs CKAN. data.gov no longer does:
+  # its /api/3/action/package_search returned 404 on 2026-11-10.
   ckan:
-    enabled: true
-    portals:
-      - name: data_gov
-        base_url: https://catalog.data.gov        # VERIFY: CKAN Action API at /api/3/action/package_search
-        rows: 50
-        formats: [csv, xlsx, xls, json, zip, pdf]
-        queries: ['"New Hampshire"', '"New Hampshire" police', '"New Hampshire" health',
-                  '"New Hampshire" housing', '"New Hampshire" education spending']
+    enabled: false
+    portals: []
 
   federal_register:
-    enabled: true                                 # VERIFY: federalregister.gov/api/v1, no key
+    enabled: true                                 # live-checked 2026-11-10: federalregister.gov/api/v1, no key
     rows: 50
     queries: ['"New Hampshire"', '"Freedom of Information Act"', '"Privacy Act" system of records',
               'surveillance', '"artificial intelligence" government']
 
   courtlistener:
-    enabled: true                                 # VERIFY: API v4; set COURTLISTENER_TOKEN for higher limits
-    courts: [nh, nhd]                             # VERIFY: nh = NH Supreme Court, nhd = D.N.H.
+    enabled: true                                 # API v4 search REQUIRES a token (401 without one, 2026-11-10): set COURTLISTENER_TOKEN
+    courts: [nh, nhd]                             # checked 2026-11-10: nh = Supreme Court of New Hampshire, nhd = D. New Hampshire
     score_bonus: 4                                # every hit is an NH court, so count it as NH
     default_beat: Courts
     rows: 25
@@ -83,7 +86,7 @@ sources:
               '"first amendment"', 'privacy']
 
   internet_archive:
-    enabled: true                                 # VERIFY: archive.org advancedsearch + metadata API
+    enabled: true                                 # live-checked 2026-11-10: advancedsearch + metadata API
     rows: 25
     extensions: [pdf, csv, xlsx, zip]
     queries: ['title:("New Hampshire") AND mediatype:texts',
@@ -91,23 +94,31 @@ sources:
 
   # Sites with no API. Pages are followed on the seed's own domain only;
   # document links pointing to other domains are still collected.
-  # VERIFY every seed URL in a browser, then point it at the page that lists
-  # the documents you want (reports, minutes, audits) instead of the home page.
   crawler:
     enabled: true
     max_pages_per_seed: 150
     score_bonus: 4                                # seeds are NH government sites
     extensions: [pdf, csv, xls, xlsx, doc, docx, zip]
     seeds:
-      - name: nh_general_court
-        url: https://gc.nh.gov/                   # VERIFY
-        publisher: NH General Court
-        depth: 1
-      - name: nh_judicial_branch
-        url: https://www.courts.nh.gov/           # VERIFY
+      # Seed URLs came from web search on 2026-11-10. All three sites refused
+      # the cloud server that ran the dry run (Akamai "Access Denied" on
+      # courts.nh.gov and doj.nh.gov, empty reply on gc.nh.gov), so none was
+      # opened. Expect them to work from a home connection, not from cloud servers.
+      - name: nh_supreme_court_opinions
+        url: https://www.courts.nh.gov/our-courts/supreme-court/orders-and-opinions/opinions/2026
+        publisher: NH Supreme Court
+        depth: 2                                  # opinion links may go through /document/ pages
+      - name: nh_judicial_branch_publications
+        url: https://www.courts.nh.gov/media/resources-media/available-publications
         publisher: NH Judicial Branch
         depth: 1
-      - name: nh_doj
-        url: https://www.doj.nh.gov/              # VERIFY
+      - name: nh_doj_resources
+        url: https://www.doj.nh.gov/resources     # reports, AG opinions, officer-involved shooting reports
         publisher: NH Department of Justice
-        depth: 1
+        path_prefix: /resources
+        depth: 2
+      - name: nh_house_record
+        url: https://gc.nh.gov/                   # House calendars/journals index URL not confirmed; follows /house pages
+        publisher: NH House of Representatives
+        path_prefix: /house
+        depth: 2

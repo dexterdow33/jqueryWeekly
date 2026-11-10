@@ -1,6 +1,7 @@
 """CourtListener (Free Law Project) opinion search, REST API v4.
 An API token is optional but raises rate limits: set COURTLISTENER_TOKEN.
-Opinion files are served from storage.courtlistener.com via local_path."""
+Opinion files are served from storage.courtlistener.com via local_path.
+Response shape and court IDs checked against the live API on 2026-11-10."""
 
 from __future__ import annotations
 
@@ -42,7 +43,9 @@ def find(session, cfg):
                 yield Candidate(
                     url=url,
                     title=hit.get("caseName", "") + (f" ({hit.get('dateFiled')})" if hit.get("dateFiled") else ""),
-                    description=op.get("snippet") or "",
+                    # NH snippets are the same rehearing boilerplate on every
+                    # opinion, so the query that found it carries the topic
+                    description=f"Found by search: {q}\n{op.get('snippet') or ''}",
                     publisher=hit.get("court", ""),
                     published=hit.get("dateFiled", ""),
                     landing_page=site + hit.get("absolute_url", ""),

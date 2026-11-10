@@ -9,7 +9,8 @@ Google Drive.
 
 1. **Find.** Asks each source for candidates: data.gov datasets, Federal
    Register documents, CourtListener opinions from NH courts, Internet Archive
-   items, and documents linked from NH government pages.
+   items, and documents linked from NH government pages (including the House
+   Record, which is served through `viewer.aspx?fileName=` links).
 2. **Score.** Each candidate is scored against the GSR beats in `config.yaml`
    (Right to Know, Courts, Legislative Watch, Privacy and Surveillance, and
    the rest). Title hits count three times as much as description hits. NH
@@ -108,8 +109,9 @@ All tuning happens in `config.yaml`:
 - **New site:** add a `crawler.seeds` entry. Point it at the page that lists
   the documents (reports, minutes, audits), not the home page. Pages are
   followed only on that seed's domain.
-- **New CKAN portal:** add an entry under `ckan.portals`. Many state and city
-  open-data portals run CKAN, so check whether a portal does before adding it.
+- **New CKAN portal:** add an entry under `ckan.portals` and set
+  `ckan.enabled: true`. Many state and city open-data portals run CKAN; check
+  for `/api/3/action/package_search` on the portal first.
 - **Bulk datasets:** raise `limits.max_file_mb` and `limits.max_run_gb`.
 
 ## Rules it follows
@@ -124,21 +126,17 @@ All tuning happens in `config.yaml`:
   returns a web page (a login or error page), the result is thrown away.
 - Filenames are sanitized and can't be written outside the archive.
 
-## Status of the sources (read before relying on it)
+## Status of the sources (live dry run, 2026-11-10)
 
-The tool was built in a session whose network blocked every source host, so
-**none of the live endpoints has been tested from here**. Each one is marked
-`VERIFY` in `config.yaml`. The code follows each service's published API
-(CKAN Action API, Federal Register API v1, CourtListener REST v4, Internet
-Archive advancedsearch and metadata). The tests run the whole pipeline
-against a local imitation of each service. Your first real step is
-`python -m gsr_collector --dry-run`, then read the report in
-`_index/runs/`. If a source logs errors, the response format has changed and
-that connector needs adjusting.
+| Source | Status |
+|---|---|
+| data.gov | Works. data.gov dropped its CKAN API (`/api/3/action/package_search` returns 404). The collector now uses the new JSON search at `catalog.data.gov/search`. |
+| Federal Register | Works, no key needed. |
+| Internet Archive | Works. **These items are uploads by members of the public, not official releases.** Treat them as leads and trace each one to its official source before citing it. |
+| CourtListener | Needs an API token: v4 search returns 401 without one. Get a free token at courtlistener.com and set `COURTLISTENER_TOKEN` (a GitHub secret of the same name for the workflow). |
+| NH courts, DOJ, General Court sites | Seeds point at listing pages found by web search. All three sites refused the cloud server that ran the test: Akamai "Access Denied" (courts.nh.gov, doj.nh.gov) and an empty reply (gc.nh.gov). Run the crawler from a home connection. GitHub Actions runs from cloud servers too, so it will probably be refused the same way. |
 
-The three crawler seeds (gc.nh.gov, courts.nh.gov, doj.nh.gov) start at
-each site's home page. Open them in a browser and replace each with the
-specific page that lists the documents you want.
+Each run's report counts source errors. A source or seed that cannot be reached is counted, so a dead source never looks like a quiet week.
 
 ## Tests
 
