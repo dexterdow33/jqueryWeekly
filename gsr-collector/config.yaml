@@ -39,7 +39,7 @@ scoring:
        amendment, RSA, committee, hearing]
     Constitutional_Law:
       [constitution, constitutional, first amendment, due process, equal protection,
-       constitutional convention, civil rights]
+       constitutional convention]
     Privacy_and_Surveillance:
       [surveillance, privacy, wiretap, eavesdropping, facial recognition, license plate reader,
        body camera, data breach, personal information]
@@ -52,7 +52,7 @@ scoring:
       [poverty, wages, housing, eviction, rent, income, inequality, child care, affordable housing]
     Government_Accountability:
       [audit, inspector general, investigation, misconduct, ethics, contract, procurement,
-       budget, spending, grant, campaign finance]
+       budget, spending, grant, campaign finance, civil rights]
     Press_Freedom:
       [press freedom, journalist, reporter, subpoena, shield law, defamation, free speech]
 
@@ -61,6 +61,7 @@ sources:
     enabled: true                                 # live-checked 2026-11-10: catalog.data.gov/search (JSON)
     rows: 50                                      # results per page
     pages: 2                                      # pages per query
+    require_nh: true                              # national datasets that never mention NH are dropped
     queries: ['"New Hampshire"', '"New Hampshire" police', '"New Hampshire" health',
               '"New Hampshire" housing', '"New Hampshire" education spending']
 
@@ -88,6 +89,7 @@ sources:
   internet_archive:
     enabled: true                                 # live-checked 2026-11-10: advancedsearch + metadata API
     rows: 25
+    score_cap: 6                                  # public uploads rank below most official-source hits
     extensions: [pdf, csv, xlsx, zip]
     queries: ['title:("New Hampshire") AND mediatype:texts',
               '"New Hampshire" AND (report OR audit OR legislature) AND mediatype:texts']

@@ -112,6 +112,10 @@ All tuning happens in `config.yaml`:
 - **New CKAN portal:** add an entry under `ckan.portals` and set
   `ckan.enabled: true`. Many state and city open-data portals run CKAN; check
   for `/api/3/action/package_search` on the portal first.
+- **Keep a source from dominating:** set `score_cap` on it. Internet Archive
+  is capped at 6, so public uploads rank below most official-source hits.
+- **NH only:** set `require_nh: true` on a source to drop anything that never
+  mentions New Hampshire. It is on for data.gov.
 - **Bulk datasets:** raise `limits.max_file_mb` and `limits.max_run_gb`.
 
 ## Rules it follows

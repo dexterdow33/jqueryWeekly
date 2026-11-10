@@ -76,6 +76,13 @@ def run(cfg: dict, only: list[str] | None = None, dry_run: bool = False,
                 c.score += scfg.get("score_bonus", 0)
                 if c.beat == "Unsorted" and scfg.get("default_beat"):
                     c.beat = scfg["default_beat"]
+                # score_cap: keep a source's long, keyword-heavy titles from
+                # outranking primary documents (used for Internet Archive)
+                if "score_cap" in scfg:
+                    c.score = min(c.score, scfg["score_cap"])
+                # require_nh: drop national material that never mentions NH
+                if scfg.get("require_nh") and "NH" not in c.matched:
+                    continue
                 if scorer.keep(c):
                     candidates.append(c)
         except Exception as e:

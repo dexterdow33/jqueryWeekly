@@ -200,3 +200,17 @@ def test_dead_crawler_seed_is_a_source_error(tmp_path):
     cfg["http"]["timeout_seconds"] = 2
     stats = run(cfg, only=["crawler"])
     assert stats["source_errors"] == 1
+
+
+def test_score_cap_and_require_nh(server, tmp_path):
+    cfg = config(server, tmp_path)
+    cfg["sources"]["internet_archive"]["score_cap"] = 6
+    stats = run(cfg, only=["internet_archive"], dry_run=True)
+    scores = [int(l.split("|")[1]) for l in Path(stats["report"]).read_text().splitlines()
+              if l.startswith("| ") and l.split("|")[1].strip().isdigit() and "internet_archive" in l]
+    assert scores and max(scores) <= 6
+
+    cfg = config(server, tmp_path / "nh")
+    cfg["scoring"]["nh_terms"] = ["Vermont"]         # fixture never mentions it
+    stats = run(cfg, only=["datagov"], dry_run=True)
+    assert stats["found"] == 1 and stats["kept"] == 0
