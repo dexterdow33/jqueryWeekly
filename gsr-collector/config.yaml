@@ -1,0 +1,129 @@
+# GSR Collector configuration. Edit this file; no code changes needed.
+#
+# Each source notes whether it was checked against the live service, and
+# when. A VERIFY marker means it has not been. Run
+#   python -m gsr_collector --dry-run
+# and read the report before trusting a source.
+
+archive_root: ~/GSR_Archive      # local archive folder; scripts/sync_to_drive.sh pushes it to Google Drive
+
+http:
+  # Identifies GSR to every server. GSR-facing address only.
+  user_agent: "GSR-Collector/1.0 (+Granite State Report; granitestatereport@gmail.com)"
+  delay_seconds: 1.5             # minimum gap between requests to the same host
+  timeout_seconds: 90
+  max_retries: 3
+  obey_robots: true              # leave on
+
+limits:
+  max_downloads_per_run: 200
+  max_file_mb: 1024              # single-file cap; raise for bulk datasets
+  max_run_gb: 20                 # stop downloading once a run pulls this much
+  allowed_extensions: [pdf, csv, xls, xlsx, doc, docx, zip, json, xml, txt]
+
+scoring:
+  min_score: 5                   # raise to be pickier, lower to harvest more
+  nh_bonus: 4
+  nh_terms: ["New Hampshire", "N.H.", "Granite State", "Concord, NH", "Manchester, NH", "Nashua"]
+  file_type_bonus: {pdf: 1, csv: 2, xlsx: 2, xls: 2, zip: 1, json: 1}
+  # Folder names = GSR categories (from GSR_Category_Plan_v1_2026-09-29).
+  beats:
+    Right_to_Know:
+      [right-to-know, "right to know", "91-A", public records, records request, FOIA,
+       freedom of information, transparency, redaction, open meetings, nonpublic session]
+    Courts:
+      [supreme court, superior court, circuit court, opinion, ruling, docket, judicial,
+       sentencing, annulment, criminal record, appeal, judge]
+    Legislative_Watch:
+      [bill, house bill, senate bill, legislature, general court, roll call, statute,
+       amendment, RSA, committee, hearing]
+    Constitutional_Law:
+      [constitution, constitutional, first amendment, due process, equal protection,
+       constitutional convention]
+    Privacy_and_Surveillance:
+      [surveillance, privacy, wiretap, eavesdropping, facial recognition, license plate reader,
+       body camera, data breach, personal information]
+    Technology_AI:
+      [artificial intelligence, "AI", algorithm, automated decision, machine learning, vendor contract]
+    Public_Health_and_Safety:
+      [public health, mental health, involuntary emergency admission, opioid, overdose,
+       Medicaid, SNAP, homelessness, department of safety, police, state police]
+    Economic_Inequality:
+      [poverty, wages, housing, eviction, rent, income, inequality, child care, affordable housing]
+    Government_Accountability:
+      [audit, inspector general, investigation, misconduct, ethics, contract, procurement,
+       budget, spending, grant, campaign finance, civil rights]
+    Press_Freedom:
+      [press freedom, journalist, reporter, subpoena, shield law, defamation, free speech]
+
+sources:
+  datagov:
+    enabled: true                                 # live-checked 2026-11-10: catalog.data.gov/search (JSON)
+    rows: 50                                      # results per page
+    pages: 2                                      # pages per query
+    require_nh: true                              # national datasets that never mention NH are dropped
+    follow_pages: true                            # entries that point at a web page: open it, take its PDFs (same host)
+    max_docs_per_page: 5
+    follow_hosts: [www.samhsa.gov]                # add a host here (and to the network allowlist) to follow its pages
+    queries: ['"New Hampshire"', '"New Hampshire" police', '"New Hampshire" health',
+              '"New Hampshire" housing', '"New Hampshire" education spending']
+
+  # For any open-data portal that still runs CKAN. data.gov no longer does:
+  # its /api/3/action/package_search returned 404 on 2026-11-10.
+  ckan:
+    enabled: false
+    portals: []
+
+  federal_register:
+    enabled: true                                 # live-checked 2026-11-10: federalregister.gov/api/v1, no key
+    rows: 50
+    queries: ['"New Hampshire"', '"Freedom of Information Act"', '"Privacy Act" system of records',
+              'surveillance', '"artificial intelligence" government']
+
+  courtlistener:
+    enabled: true                                 # API v4 search REQUIRES a token (401 without one, 2026-11-10): set COURTLISTENER_TOKEN
+    courts: [nh, nhd]                             # checked 2026-11-10: nh = Supreme Court of New Hampshire, nhd = D. New Hampshire
+    score_bonus: 4                                # every hit is an NH court, so count it as NH
+    default_beat: Courts
+    rows: 25
+    queries: ['"right-to-know"', '"91-A"', '"public records"', 'surveillance', '"free speech"',
+              '"first amendment"', 'privacy']
+
+  internet_archive:
+    enabled: true                                 # live-checked 2026-11-10: advancedsearch + metadata API
+    rows: 25
+    score_cap: 6                                  # public uploads rank below most official-source hits
+    extensions: [pdf, csv, xlsx, zip]
+    queries: ['title:("New Hampshire") AND mediatype:texts',
+              '"New Hampshire" AND (report OR audit OR legislature) AND mediatype:texts']
+
+  # Sites with no API. Pages are followed on the seed's own domain only;
+  # document links pointing to other domains are still collected.
+  crawler:
+    enabled: true
+    max_pages_per_seed: 150
+    score_bonus: 4                                # seeds are NH government sites
+    extensions: [pdf, csv, xls, xlsx, doc, docx, zip]
+    seeds:
+      # Seed URLs came from web search on 2026-11-10. All three sites refused
+      # the cloud server that ran the dry run (Akamai "Access Denied" on
+      # courts.nh.gov and doj.nh.gov, empty reply on gc.nh.gov), so none was
+      # opened. Expect them to work from a home connection, not from cloud servers.
+      - name: nh_supreme_court_opinions
+        url: https://www.courts.nh.gov/our-courts/supreme-court/orders-and-opinions/opinions/2026
+        publisher: NH Supreme Court
+        depth: 2                                  # opinion links may go through /document/ pages
+      - name: nh_judicial_branch_publications
+        url: https://www.courts.nh.gov/media/resources-media/available-publications
+        publisher: NH Judicial Branch
+        depth: 1
+      - name: nh_doj_resources
+        url: https://www.doj.nh.gov/resources     # reports, AG opinions, officer-involved shooting reports
+        publisher: NH Department of Justice
+        path_prefix: /resources
+        depth: 2
+      - name: nh_house_record
+        url: https://gc.nh.gov/                   # House calendars/journals index URL not confirmed; follows /house pages
+        publisher: NH House of Representatives
+        path_prefix: /house
+        depth: 2

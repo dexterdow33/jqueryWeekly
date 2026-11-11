@@ -1,0 +1,79 @@
+name: GSR Collector
+
+# Weekly harvest straight into Google Drive. Needs one repository secret:
+#   RCLONE_CONF  = the full text of your rclone.conf with a remote named "gdrive"
+#                  (see gsr-collector/README.md, "Run it automatically").
+# Optional secret: COURTLISTENER_TOKEN.
+
+on:
+  schedule:
+    - cron: "47 10 * * 1"      # Mondays 10:47 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Find and score only, download nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gsr-collector
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: gsr-collector
+    env:
+      REMOTE: gdrive:GSR_Archive
+      COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: echo "ARCHIVE=$RUNNER_TEMP/GSR_Archive" >> "$GITHUB_ENV"
+
+      - name: Configure rclone
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          if [ -z "$RCLONE_CONF" ]; then
+            echo "::error::RCLONE_CONF secret is not set. See gsr-collector/README.md, 'Run it automatically'."
+            exit 1
+          fi
+          sudo apt-get install -y -qq rclone
+          mkdir -p ~/.config/rclone
+          printf '%s\n' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
+
+      # Bring down the dedupe index so files already in Drive are not fetched again.
+      - name: Restore archive index from Drive
+        run: |
+          mkdir -p "$ARCHIVE/_index"
+          rclone copy "$REMOTE/_index" "$ARCHIVE/_index" --exclude "staging/**" || echo "no index yet (first run)"
+
+      - name: Harvest
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          ARGS=""
+          if [ "$DRY_RUN" = "true" ]; then ARGS="--dry-run"; fi
+          python -m gsr_collector --archive "$ARCHIVE" $ARGS
+
+      - name: Push to Drive
+        if: always()
+        run: |
+          [ -d "$ARCHIVE" ] && rclone copy "$ARCHIVE" "$REMOTE" --exclude "_index/staging/**" --exclude "*.part" --transfers 4
+
+      - name: Run report
+        if: always()
+        run: |
+          r=$(ls -t "$ARCHIVE"/_index/runs/*_report.md 2>/dev/null | head -1)
+          [ -n "$r" ] && cat "$r" >> "$GITHUB_STEP_SUMMARY" || true
