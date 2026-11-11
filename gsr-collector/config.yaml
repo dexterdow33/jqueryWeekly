@@ -62,6 +62,9 @@ sources:
     rows: 50                                      # results per page
     pages: 2                                      # pages per query
     require_nh: true                              # national datasets that never mention NH are dropped
+    follow_pages: true                            # entries that point at a web page: open it, take its PDFs (same host)
+    max_docs_per_page: 5
+    follow_hosts: [www.samhsa.gov]                # add a host here (and to the network allowlist) to follow its pages
     queries: ['"New Hampshire"', '"New Hampshire" police', '"New Hampshire" health',
               '"New Hampshire" housing', '"New Hampshire" education spending']
 

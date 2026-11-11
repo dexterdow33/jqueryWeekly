@@ -30,6 +30,11 @@ def make_routes(base):
                  {"downloadURL": f"{base}/files/stops.csv", "mediaType": "text/csv", "title": "stops"},
                  {"accessURL": f"{base}/files/stops.html", "title": "web view"}]}},
             {"title": "New Hampshire record with no files", "slug": "x", "dcat": {"distribution": None}},
+            # listed as a web page, the way SAMHSA's NH reports are
+            {"title": "Behavioral Health Barometer: New Hampshire, Volume 6", "slug": "bhb-nh-6",
+             "description": "Mental health and substance use in New Hampshire.", "publisher": "SAMHSA",
+             "dcat": {"distribution": [
+                 {"downloadURL": f"{base}/samhsa/report/bhb-nh-6", "mediaType": "text/html"}]}},
         ]}).encode()),
         "/fr/documents.json": ("application/json", json.dumps({"results": [{
             "title": "Privacy Act of 1974; System of Records (New Hampshire surveillance program)",
@@ -58,6 +63,10 @@ def make_routes(base):
             <a href="/files/huge.pdf">Huge audit report surveillance</a>
             <a href="/house/viewer.aspx?fileName=Calendars\\2026\\No12+March+20+2026.PDF">House Record: committee report on HB 1576</a></html>"""),
         "/house/viewer.aspx": ("application/pdf", PDF + b"house record"),
+        "/samhsa/report/bhb-nh-6": ("text/html", b"""<html><title>Barometer</title>
+            <a href="/data/files/NewHampshire-BH-Barometer_Volume6.pdf">Download the report</a>
+            <a href="https://elsewhere.example/other.pdf">Someone else's PDF</a></html>"""),
+        "/data/files/NewHampshire-BH-Barometer_Volume6.pdf": ("application/pdf", PDF + b"barometer"),
         "/files/stops.csv": ("text/csv", b"date,town\n2026-01-01,Concord\n"),
         "/files/stops.html": ("text/html", b"<html>web</html>"),
         "/files/fr.pdf": ("application/pdf", PDF + b"fr"),
@@ -105,7 +114,8 @@ def config(base, root):
     cfg["http"]["max_retries"] = 0
     cfg["limits"]["max_file_mb"] = 0.1
     s = cfg["sources"]
-    s["datagov"].update(base_url=base, queries=["x"], pages=1)
+    s["datagov"].update(base_url=base, queries=["x"], pages=1,
+                        follow_hosts=[base.split("//", 1)[1]])
     s["federal_register"].update(api=f"{base}/fr/documents.json", queries=["x"])
     s["courtlistener"].update(api=f"{base}/cl/search/", storage_url=f"{base}/",
                               site_url=base, queries=["x"])
@@ -123,10 +133,16 @@ def test_full_run_then_rerun(server, tmp_path):
     files = sorted(p.relative_to(root).as_posix() for p in root.rglob("*")
                    if p.is_file() and not p.name.endswith(".source.json") and "_index" not in p.parts)
 
-    # stops.csv, fr.pdf, op.pdf, audit.pdf, investigation.pdf, House Record via viewer.aspx
-    assert stats["new"] == 6, files
+    # stops.csv, fr.pdf, op.pdf, audit.pdf, investigation.pdf, House Record via
+    # viewer.aspx, Barometer PDF followed from its report page
+    assert stats["new"] == 7, files
     assert stats["duplicate"] == 1                     # fr_copy.pdf has fr.pdf's bytes
-    assert len(files) == 6
+    assert len(files) == 7
+    barometer = [f for f in files if "Barometer" in f]
+    assert len(barometer) == 1 and barometer[0].startswith("Public_Health_and_Safety/")
+    meta = json.loads((root / (barometer[0] + ".source.json")).read_text())
+    assert meta["landing_page"] == f"{server}/samhsa/report/bhb-nh-6"
+    assert meta["extra"]["followed_from"] == meta["landing_page"]
     assert any(f.startswith("Legislative_Watch/") and "House-Record" in f for f in files)
     assert any(f.startswith("Public_Health_and_Safety/") and f.endswith(".csv") for f in files)
     # filed by topic: a right-to-know opinion goes to Right_to_Know, not Courts
@@ -151,10 +167,10 @@ def test_full_run_then_rerun(server, tmp_path):
     urls = {dup[0]["url"]} | {a["url"] for a in dup[0]["also_found_at"]}
     assert urls == {f"{server}/files/fr.pdf", f"{server}/files/fr_copy.pdf"}
     with open(root / "_index" / "manifest.csv") as fh:
-        assert len(list(csv.DictReader(fh))) == 6
+        assert len(list(csv.DictReader(fh))) == 7
 
     again = run(cfg)
-    assert again["new"] == 0 and again["already_had"] >= 7
+    assert again["new"] == 0 and again["already_had"] >= 8
 
 
 def test_dry_run_downloads_nothing(server, tmp_path):
@@ -202,6 +218,15 @@ def test_dead_crawler_seed_is_a_source_error(tmp_path):
     assert stats["source_errors"] == 1
 
 
+def test_follow_hosts_limits_page_follower(server, tmp_path):
+    cfg = config(server, tmp_path)
+    cfg["sources"]["datagov"]["follow_hosts"] = ["somewhere-else.example"]
+    stats = run(cfg, only=["datagov"], dry_run=True)
+    report = Path(stats["report"]).read_text()
+    assert "Barometer_Volume6.pdf" not in report          # page not opened
+    assert "skipped: .html not allowed" in report         # left as a page
+
+
 def test_score_cap_and_require_nh(server, tmp_path):
     cfg = config(server, tmp_path)
     cfg["sources"]["internet_archive"]["score_cap"] = 6
@@ -213,4 +238,4 @@ def test_score_cap_and_require_nh(server, tmp_path):
     cfg = config(server, tmp_path / "nh")
     cfg["scoring"]["nh_terms"] = ["Vermont"]         # fixture never mentions it
     stats = run(cfg, only=["datagov"], dry_run=True)
-    assert stats["found"] == 1 and stats["kept"] == 0
+    assert stats["found"] == 2 and stats["kept"] == 0    # stops.csv + followed PDF

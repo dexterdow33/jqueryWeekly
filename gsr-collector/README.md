@@ -116,6 +116,11 @@ All tuning happens in `config.yaml`:
   is capped at 6, so public uploads rank below most official-source hits.
 - **NH only:** set `require_nh: true` on a source to drop anything that never
   mentions New Hampshire. It is on for data.gov.
+- **Reports data.gov lists as web pages:** with `follow_pages: true`, the
+  data.gov connector opens the page and takes up to `max_docs_per_page`
+  documents linked from it, same host only. It only opens pages on
+  `follow_hosts` (now `www.samhsa.gov`, for SAMHSA's NH reports). To follow
+  another publisher's pages, add its host there and to the network allowlist.
 - **Bulk datasets:** raise `limits.max_file_mb` and `limits.max_run_gb`.
 
 ## Rules it follows
@@ -134,10 +139,10 @@ All tuning happens in `config.yaml`:
 
 | Source | Status |
 |---|---|
-| data.gov | Works. data.gov dropped its CKAN API (`/api/3/action/package_search` returns 404). The collector now uses the new JSON search at `catalog.data.gov/search`. |
+| data.gov | Works. data.gov dropped its CKAN API (`/api/3/action/package_search` returns 404). The collector now uses the new JSON search at `catalog.data.gov/search`, and follows SAMHSA report pages to their PDFs (checked live 2026-11-11). |
 | Federal Register | Works, no key needed. |
 | Internet Archive | Works. **These items are uploads by members of the public, not official releases.** Treat them as leads and trace each one to its official source before citing it. |
-| CourtListener | Needs an API token: v4 search returns 401 without one. Get a free token at courtlistener.com and set `COURTLISTENER_TOKEN` (a GitHub secret of the same name for the workflow). |
+| CourtListener | Needs an API token: v4 search returns 401 without one. Get a free token at courtlistener.com and set `COURTLISTENER_TOKEN` (a GitHub secret of the same name for the workflow). In a Claude Code cloud environment, save it as a network secret of token type with header `Authorization` and prefix `Token`; a username/password entry fails with "Invalid username/password." |
 | NH courts, DOJ, General Court sites | Seeds point at listing pages found by web search. All three sites refused the cloud server that ran the test: Akamai "Access Denied" (courts.nh.gov, doj.nh.gov) and an empty reply (gc.nh.gov). Run the crawler from a home connection. GitHub Actions runs from cloud servers too, so it will probably be refused the same way. |
 
 Each run's report counts source errors. A source or seed that cannot be reached is counted, so a dead source never looks like a quiet week.
