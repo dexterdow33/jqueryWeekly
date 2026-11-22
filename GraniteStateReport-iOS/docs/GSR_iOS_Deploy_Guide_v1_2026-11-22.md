@@ -21,7 +21,7 @@ You do not need a server, an API key, or any change to granitestatereport.com. T
 
 ## Step 1. Get the code onto the Mac
 
-The app lives in the `GraniteStateReport-iOS` folder of the `dexterdow33/jqueryWeekly` repository, on the branch `claude/granitestatereport-ios-app-2kwb87` (or on `main` once the pull request is merged).
+The app lives in the `GraniteStateReport-iOS` folder of the `dexterdow33/jqueryWeekly` repository, on the branch `claude/granitestatereport-ios-app-2kwb87` (or on `master` once the pull request is merged).
 
 ```bash
 git clone https://github.com/dexterdow33/jqueryWeekly.git
