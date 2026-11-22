@@ -65,9 +65,15 @@ identical bytes are never stored twice.
 
 ## Put it in Google Drive
 
-**On your computer:** install rclone (https://rclone.org/downloads/), then run
+**On a Mac, one command:** `bash scripts/mac_setup_and_harvest.sh` installs
+rclone, sets up the collector in `~/Documents/GSR`, walks you through the
+one-time Drive login, harvests, and syncs.
+
+**By hand:** install rclone (https://rclone.org/downloads/), then run
 `rclone config`. Create a new remote named `gdrive` with storage type `drive`
-and scope `drive.file`, and sign in as granitestatereport@gmail.com. Then run:
+and scope `drive` (full). The narrower `drive.file` scope cannot see a
+`GSR_Archive` folder that something else created, so rclone would make a
+second one. Sign in as granitestatereport@gmail.com. Then run:
 
 ```
 scripts/run_and_sync.sh          # harvest, then copy to Drive:/GSR_Archive
@@ -96,8 +102,7 @@ also start it from the Actions tab.
 Each run first pulls `_index` down from Drive, so files already archived are
 skipped. It pushes the new files up, and the run report appears on the
 workflow's summary page. The `RCLONE_CONF` secret gives access to your Drive.
-Keep the repository private, or use `drive.file` scope so it can only touch
-files rclone created.
+Keep the repository private.
 
 ## Tune it
 

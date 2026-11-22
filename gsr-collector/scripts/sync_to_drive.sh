@@ -4,7 +4,8 @@
 # One-time setup on your computer:
 #   1. Install rclone: https://rclone.org/downloads/
 #   2. rclone config  ->  n (new remote)  ->  name: gdrive  ->  storage: drive
-#      scope: drive.file  (rclone can only see files it created; safest)
+#      scope: drive  (full access; drive.file cannot see the GSR_Archive folder
+#      that already exists in Drive, so rclone would create a second one)
 #      sign in as granitestatereport@gmail.com when the browser opens.
 #
 # Usage:  scripts/sync_to_drive.sh [local_archive] [remote:folder]
