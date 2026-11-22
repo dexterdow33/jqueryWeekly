@@ -85,9 +85,16 @@ struct ArticleWebView: UIViewRepresentable {
         @MainActor
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-            guard navigationAction.navigationType == .linkActivated,
-                  let url = navigationAction.request.url
-            else { return .allow }
+            guard let url = navigationAction.request.url else { return .allow }
+
+            // Anything other than a tapped link may load only inside a frame or as the story itself.
+            if navigationAction.navigationType != .linkActivated {
+                let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
+                let isOwnDocument = GSR.isGSR(url) && (url.path.isEmpty || url.path == "/")
+                if !isMainFrame || isOwnDocument || url.scheme == "about" { return .allow }
+                parent.onLink(url)
+                return .cancel
+            }
 
             // Footnote and in-page anchors stay in the page.
             if url.fragment != nil, GSR.isGSR(url), url.path.isEmpty || url.path == "/" {
@@ -100,6 +107,11 @@ struct ArticleWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             // The size set at document start can be lost on some pages; set it again once loaded.
             webView.evaluateJavaScript(Coordinator.textSizeScript(appliedTextSize), completionHandler: nil)
+        }
+
+        /// iOS can end the page's process to free memory, often while audio plays. Put the story back.
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            load(parent, into: webView)
         }
 
         /// Links that ask for a new window (target="_blank") arrive here.

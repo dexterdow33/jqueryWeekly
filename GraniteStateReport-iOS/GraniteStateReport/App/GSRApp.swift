@@ -18,7 +18,7 @@ struct GSRApp: App {
                 .environment(router)
                 .environment(player)
                 .tint(Color.gsrBrick)
-                .task { await sections.load() }
+                .task { await sections.load(force: true) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {

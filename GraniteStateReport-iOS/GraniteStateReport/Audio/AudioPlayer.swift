@@ -151,7 +151,7 @@ final class AudioPlayer {
     func setSpeed(_ newSpeed: Float) {
         speed = newSpeed
         UserDefaults.standard.set(newSpeed, forKey: AudioPlayer.speedKey)
-        if isPlaying, !(current?.isLive ?? true) {
+        if player.timeControlStatus != .paused, !(current?.isLive ?? true) {
             player.rate = newSpeed
         }
         updateNowPlaying()
@@ -179,10 +179,11 @@ final class AudioPlayer {
 
         let item = AVPlayerItem(url: track.url)
         item.audioTimePitchAlgorithm = .timeDomain
-        itemObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            let failed = item.status == .failed
+        itemObservation = item.observe(\.status, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in
-                guard let self, token == self.loadToken, failed else { return }
+                guard let self, token == self.loadToken,
+                      self.player.currentItem?.status == .failed
+                else { return }
                 self.didFail = true
                 self.isBuffering = false
                 self.isPlaying = false
@@ -226,10 +227,10 @@ final class AudioPlayer {
             }
         }
 
-        statusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            let status = player.timeControlStatus
+        statusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in
                 guard let self else { return }
+                let status = self.player.timeControlStatus
                 self.isPlaying = status == .playing
                 self.isBuffering = status == .waitingToPlayAtSpecifiedRate
                 self.updateNowPlaying()

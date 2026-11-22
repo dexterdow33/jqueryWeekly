@@ -52,6 +52,7 @@ struct TodayView: View {
         }
         .onChange(of: router.pendingPostID, initial: true) { _, postID in
             guard let postID else { return }
+            showsAbout = false
             path = [.post(id: postID)]
             router.pendingPostID = nil
         }

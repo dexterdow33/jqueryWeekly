@@ -64,7 +64,7 @@ final class WordPressAPI {
         if let search, !search.isEmpty {
             query.append(URLQueryItem(name: "search", value: search))
         }
-        let (data, response) = try await data(path: "/wp/v2/posts", query: query)
+        let (data, response) = try await request(path: "/wp/v2/posts", query: query)
         let dtos = try decode([PostDTO].self, from: data)
         let total = Int(response.value(forHTTPHeaderField: "X-WP-TotalPages") ?? "") ?? page
         return PostPage(articles: dtos.compactMap { $0.article() }, totalPages: max(total, 1))
@@ -72,7 +72,7 @@ final class WordPressAPI {
 
     func post(id: Int) async throws -> Article {
         let query = [URLQueryItem(name: "_fields", value: WordPressAPI.fullFields)]
-        let (data, _) = try await data(path: "/wp/v2/posts/\(id)", query: query)
+        let (data, _) = try await request(path: "/wp/v2/posts/\(id)", query: query)
         guard let article = try decode(PostDTO.self, from: data).article() else {
             throw APIError.badResponse
         }
@@ -84,7 +84,7 @@ final class WordPressAPI {
             URLQueryItem(name: "slug", value: slug),
             URLQueryItem(name: "_fields", value: WordPressAPI.fullFields)
         ]
-        let (data, _) = try await data(path: "/wp/v2/posts", query: query)
+        let (data, _) = try await request(path: "/wp/v2/posts", query: query)
         guard let article = try decode([PostDTO].self, from: data).first?.article() else {
             throw APIError.notFound
         }
@@ -99,7 +99,7 @@ final class WordPressAPI {
             URLQueryItem(name: "hide_empty", value: "true"),
             URLQueryItem(name: "_fields", value: "id,name,slug,count,parent")
         ]
-        let (data, _) = try await data(path: "/wp/v2/categories", query: query)
+        let (data, _) = try await request(path: "/wp/v2/categories", query: query)
         return try decode([NewsCategory].self, from: data).map { category in
             var decoded = category
             decoded.name = HTMLText.decodeEntities(category.name)
@@ -110,12 +110,12 @@ final class WordPressAPI {
     // MARK: Site features
 
     func liveStatus() async throws -> LiveStatus {
-        let (data, _) = try await data(path: "/gsr-live/v1/status", query: [])
+        let (data, _) = try await request(path: "/gsr-live/v1/status", query: [])
         return try decode(LiveStatus.self, from: data)
     }
 
     func mediaCatalog() async throws -> MediaCatalog {
-        let (data, _) = try await data(path: "/gsr-radio/v1/stations", query: [])
+        let (data, _) = try await request(path: "/gsr-radio/v1/stations", query: [])
         return try decode(MediaCatalog.self, from: data)
     }
 
@@ -129,7 +129,7 @@ final class WordPressAPI {
         }
     }
 
-    private func data(path: String, query: [URLQueryItem]) async throws -> (Data, HTTPURLResponse) {
+    private func request(path: String, query: [URLQueryItem]) async throws -> (Data, HTTPURLResponse) {
         guard var components = URLComponents(string: GSR.apiBaseURL.absoluteString + path) else {
             throw APIError.badResponse
         }

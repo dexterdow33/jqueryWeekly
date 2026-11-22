@@ -85,7 +85,8 @@ struct ArticleRow: View {
 /// Save and share, for long-press menus.
 struct ArticleMenuItems: View {
     let article: Article
-    @Environment(Library.self) private var library
+    /// Passed in, not read from the environment, so the menu works wherever it is presented.
+    let library: Library
 
     var body: some View {
         Button {
@@ -154,7 +155,7 @@ struct FeedContent: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .contextMenu { ArticleMenuItems(article: article) }
+                    .contextMenu { ArticleMenuItems(article: article, library: library) }
                     .onAppear {
                         Task { await feed.loadMoreIfNeeded(after: article) }
                     }

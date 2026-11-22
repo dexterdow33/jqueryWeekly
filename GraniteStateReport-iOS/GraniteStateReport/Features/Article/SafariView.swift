@@ -9,15 +9,34 @@ struct BrowserPage: Identifiable {
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onFinish: { dismiss() })
+    }
 
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let controller = SFSafariViewController(url: url)
+        controller.delegate = context.coordinator
         controller.preferredControlTintColor = UIColor(hex: 0xB14A37)
         controller.dismissButtonStyle = .done
         return controller
     }
 
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+
+    /// Tells SwiftUI when the reader taps Done, so the same page can be opened again.
+    final class Coordinator: NSObject, SFSafariViewControllerDelegate {
+        private let onFinish: () -> Void
+
+        init(onFinish: @escaping () -> Void) {
+            self.onFinish = onFinish
+        }
+
+        func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+            onFinish()
+        }
+    }
 }
 
 /// Decides where a link goes: a story inside the app, a page in the in-app browser,

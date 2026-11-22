@@ -53,7 +53,7 @@ struct ArticleView: View {
         }
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .toolbar { articleToolbar }
         .task { await load() }
         .navigationDestination(item: $linkedSlug) { slug in
             ArticleView(source: .slug(slug))
@@ -65,7 +65,7 @@ struct ArticleView: View {
     }
 
     @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
+    private var articleToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if let article {
                 if page?.narration != nil {
@@ -133,7 +133,7 @@ struct ArticleView: View {
     private func listen() {
         guard let article, let url = page?.narration else { return }
         let track = AudioTrack(url: url, title: article.title, subtitle: "Article narration", link: article.link)
-        if player.current == track {
+        if player.current?.url == url {
             player.toggle()
         } else {
             player.play(track, queue: [track])
